@@ -1,0 +1,39 @@
+# Python 虚拟环境（镜像内由 uv venv 单独创建）
+.venv/
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# uv 锁文件（构建时由 uv 重新生成依赖）
+uv.lock
+
+# 测试与文档
+test_sample.md
+test_sample.docx
+API.md
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Docker 相关（避免递归）
+dockerfile
+dockerfile.uv
+docker-compose.yml
+docker-compose.override.yml
+
+# 日志
+*.log
+
+# 临时文件
+*.tmp

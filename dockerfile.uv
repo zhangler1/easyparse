@@ -1,13 +1,11 @@
-FROM python:3.12-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 # 设置非交互模式
 ENV DEBIAN_FRONTEND=noninteractive
 ENV EXIFTOOL_PATH=/usr/bin/exiftool
 ENV FFMPEG_PATH=/usr/bin/ffmpeg
 
-# 换用清华源
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
-    sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list
+
 
 # 安装运行时依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -23,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 uv
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.7.20   /uv /usr/local/bin/uv
 
 # 设置 uv 清华镜像源
 ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple/
@@ -39,8 +37,7 @@ ENV VIRTUAL_ENV=/app/.venv
 COPY pyproject.toml ./
 
 # 使用 uv 安装依赖（在 venv 中）
-RUN uv pip install --no-cache --no-install-project \
-    -e ".[all]"
+RUN uv sync --no-cache --no-install-project 
 
 # 再复制项目源码
 COPY . /app
@@ -50,11 +47,11 @@ RUN uv pip install --no-cache \
     -e /app/packages/markitdown[all] \
     -e /app/packages/markitdown-sample-plugin
 
-# 安装字体
-RUN mkdir -p /usr/share/fonts/my_fonts && \
-    unzip -j Fonts.zip -d /usr/share/fonts/my_fonts && \
-    mkfontscale /usr/share/fonts/my_fonts && \
-    rm Fonts.zip
+# # 安装字体
+# RUN mkdir -p /usr/share/fonts/my_fonts && \
+#     unzip -j Fonts.zip -d /usr/share/fonts/my_fonts && \
+#     mkfontscale /usr/share/fonts/my_fonts && \
+#     rm Fonts.zip
 
 # 启动命令
 ENTRYPOINT ["uvicorn", "server:app", "--host", "0.0.0.0"]
