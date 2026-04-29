@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
+from contextlib import asynccontextmanager
 import logging
 import uvicorn
 import uuid
@@ -8,6 +9,7 @@ from contextvars import ContextVar
 from log_manager import logger
 from routers import convert, ofdtopdf, mdtoword
 from config import ServerConfig
+from utils.common import executor as md_executor, _temp_tracker
 
 # 使用ContextVar存储请求ID
 request_id_var = ContextVar("request_id", default=None)
@@ -22,8 +24,24 @@ class RequestIDFilter(logging.Filter):
 
 logger.addFilter(RequestIDFilter())
 
+# 应用生命周期管理：启动时初始化资源，关闭时释放线程池
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Application startup")
+    yield
+    # 关闭所有线程池
+    logger.info("Shutting down thread pools...")
+    md_executor.shutdown(wait=False)
+    convert.img_executor.shutdown(wait=False)
+    convert.image_uploader.executor.shutdown(wait=False)
+    # 清理追踪器中残留的临时文件
+    leaked = _temp_tracker.cleanup_all()
+    if leaked:
+        logger.warning(f"Cleaned up {leaked} leaked temp files on shutdown")
+    logger.info("All thread pools shut down")
+
 # 初始化FastAPI应用
-app = FastAPI(docs_url=None, redoc_url=None)
+app = FastAPI(docs_url=None, redoc_url=None, lifespan=lifespan)
 
 # 添加中间件
 app.add_middleware(GZipMiddleware, minimum_size=1024)

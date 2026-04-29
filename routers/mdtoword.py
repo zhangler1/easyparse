@@ -1,6 +1,6 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
 from fastapi.responses import FileResponse
-from utils.common import executor, safe_remove, cleanup, save_to_tempfile
+from utils.common import executor, safe_remove, cleanup, save_to_tempfile, _temp_tracker
 from log_manager import logger
 import os
 import tempfile
@@ -57,9 +57,10 @@ async def convert_markdown_to_word(
         result_path = os.path.join(
             tempfile.gettempdir(), f"docx_{uuid.uuid4().hex}.docx"
         )
+        _temp_tracker.register(result_path)
 
         # 使用共享线程池执行同步转换函数（原逻辑不变）
-        await asyncio.get_event_loop().run_in_executor(
+        await asyncio.get_running_loop().run_in_executor(
             executor,
             lambda: md2word(upload_path, result_path),
         )

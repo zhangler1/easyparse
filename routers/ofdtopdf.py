@@ -7,6 +7,7 @@ from utils.common import (
     save_to_tempfile,
     convert_ofd_to_pdf,
     get_file_mimetype,
+    _temp_tracker,
 )
 from log_manager import logger
 import os
@@ -67,6 +68,7 @@ async def convert_ofd_to_pdf(
 
         with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as tmp:
             result_path = tmp.name
+            _temp_tracker.register(result_path)
             tmp.write(pdf_bytes)
             result_size = os.path.getsize(result_path)
 

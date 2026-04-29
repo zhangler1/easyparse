@@ -10,6 +10,7 @@ from utils.common import (
     convert_pdf_to_txt,
     convert_ofd_to_pdf,
     get_file_mimetype,
+    _temp_tracker,
 )
 from log_manager import logger
 import os
@@ -106,7 +107,7 @@ async def convert_file(
             result = await convert_pdf_to_txt(pdf_bytes, ConversionConfig.IMAGE_OUTPUT_DIR, output_uuid)
         else:
             upload_path, _ = await save_to_tempfile(file)
-            result = await asyncio.get_event_loop().run_in_executor(
+            result = await asyncio.get_running_loop().run_in_executor(
                 executor, lambda: md.convert(
                     upload_path,
                     image_output_dir=ConversionConfig.IMAGE_OUTPUT_DIR,
@@ -124,6 +125,7 @@ async def convert_file(
                     encoding=ConversionConfig.TEMP_FILE_ENCODING
             ) as result_tmp:
                 result_path = result_tmp.name
+                _temp_tracker.register(result_path)
                 result_tmp.write(result.text_content)
 
                 # 处理图片路径上传
@@ -133,7 +135,7 @@ async def convert_file(
                     imgs_save_path = list(imgs_save_path) if imgs_save_path else []
 
                     # 使用线程池批量上传图片
-                    upload_results = await asyncio.get_event_loop().run_in_executor(
+                    upload_results = await asyncio.get_running_loop().run_in_executor(
                         img_executor,
                         lambda: image_uploader.upload_images(imgs_save_path[:imgNum], request_id)
                     )
