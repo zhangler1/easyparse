@@ -8,9 +8,7 @@
 
 services:
   easyparse:
-    build:
-      context: .
-      dockerfile: dockerfile.uv
+    image: easyparse:latest
     command:
       - "--reload"          # uvicorn 热重载
       - "--port=5000"

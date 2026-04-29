@@ -1,8 +1,6 @@
 services:
   easyparse:
-    build:
-      context: .
-      dockerfile: dockerfile.uv
+    image: easyparse:latest
     ports:
       - "${PORT:-5000}:5000"
     environment:
