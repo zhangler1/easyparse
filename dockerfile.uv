@@ -1,4 +1,4 @@
-FROM python:3.10-slim-bullseye
+FROM python:3.12-slim-bookworm
 
 # 设置非交互模式
 ENV DEBIAN_FRONTEND=noninteractive
@@ -30,18 +30,23 @@ ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple/
 
 WORKDIR /app
 
+# 创建虚拟环境
+RUN uv venv /app/.venv
+ENV PATH="/app/.venv/bin:$PATH"
+ENV VIRTUAL_ENV=/app/.venv
+
 # 先复制依赖声明文件（利用 Docker 缓存层）
 COPY pyproject.toml ./
 
-# 使用 uv 安装依赖
-RUN uv pip install --system --no-cache \
+# 使用 uv 安装依赖（在 venv 中）
+RUN uv pip install --no-cache --no-install-project \
     -e ".[all]"
 
 # 再复制项目源码
 COPY . /app
 
 # 安装本地 markitdown 包
-RUN uv pip install --system --no-cache \
+RUN uv pip install --no-cache \
     -e /app/packages/markitdown[all] \
     -e /app/packages/markitdown-sample-plugin
 
