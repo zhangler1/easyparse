@@ -1,0 +1,55 @@
+[project]
+name = "easyparse"
+version = "0.1.0"
+description = "文件解析与转换服务（OFD/PDF/Markdown → 文本/Word）"
+requires-python = ">=3.10"
+
+dependencies = [
+    # Web 框架
+    "fastapi",
+    "uvicorn",
+    "python-multipart",
+
+    # 文档转换
+    "python-docx",
+    "beautifulsoup4",
+    "markdown",
+    "pyyaml",
+    "easyofd",
+    "markitdown[all]",
+
+    # 图片处理
+    "pillow",
+    "requests",
+
+    # PDF 处理
+    "reportlab==3.6.11",
+    "xmltodict==0.13.0",
+    "pdf2image",
+    "pdfminer.six",
+
+    # 日志与调度
+    "pytz",
+    "apscheduler",
+    "loguru==0.7.2",
+
+    # 其他
+    "werkzeug",
+    "fontTools==4.43.1",
+    "pyasn1==0.6.1",
+]
+
+[project.optional-dependencies]
+all = [
+    "markitdown[all]",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.setuptools]
+packages = ["routers", "utils", "md2word", "md2word.parser", "md2word.provider", "md2word.utils", "md2word.config"]
+
+[tool.uv]
+index-url = "https://pypi.mirrors.ustc.edu.cn/simple/"

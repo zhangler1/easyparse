@@ -1,0 +1,56 @@
+FROM python:3.10-slim-bullseye
+
+# 设置非交互模式
+ENV DEBIAN_FRONTEND=noninteractive
+ENV EXIFTOOL_PATH=/usr/bin/exiftool
+ENV FFMPEG_PATH=/usr/bin/ffmpeg
+
+# 换用清华源
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list && \
+    sed -i 's|security.debian.org|mirrors.tuna.tsinghua.edu.cn/debian-security|g' /etc/apt/sources.list
+
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ffmpeg \
+    exiftool \
+    procps \
+    zip \
+    unzip \
+    vim \
+    fontconfig \
+    xfonts-utils \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# 设置 uv 清华镜像源
+ENV UV_INDEX_URL=https://pypi.mirrors.ustc.edu.cn/simple/
+
+WORKDIR /app
+
+# 先复制依赖声明文件（利用 Docker 缓存层）
+COPY pyproject.toml ./
+
+# 使用 uv 安装依赖
+RUN uv pip install --system --no-cache \
+    -e ".[all]"
+
+# 再复制项目源码
+COPY . /app
+
+# 安装本地 markitdown 包
+RUN uv pip install --system --no-cache \
+    -e /app/packages/markitdown[all] \
+    -e /app/packages/markitdown-sample-plugin
+
+# 安装字体
+RUN mkdir -p /usr/share/fonts/my_fonts && \
+    unzip -j Fonts.zip -d /usr/share/fonts/my_fonts && \
+    mkfontscale /usr/share/fonts/my_fonts && \
+    rm Fonts.zip
+
+# 启动命令
+ENTRYPOINT ["uvicorn", "server:app", "--host", "0.0.0.0"]
+CMD ["--port", "5000", "--workers", "4"]
