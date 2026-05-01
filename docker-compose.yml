@@ -12,6 +12,8 @@ services:
       - IMAGE_OUTPUT_DIR=${IMAGE_OUTPUT_DIR:-/tmp/shared_all/assert}
       - ERROR_IMG_DIR=${ERROR_IMG_DIR:-/tmp/shared_all/error}
       - LOG_DIR=${LOG_DIR:-/tmp/shared_all/logs}
+      - LIMIT_MAX_REQUESTS=${LIMIT_MAX_REQUESTS:-200}
+      - TIMEOUT_GRACEFUL_SHUTDOWN=${TIMEOUT_GRACEFUL_SHUTDOWN:-30}
     volumes:
       - venv_data:/app/.venv
       - shared_tmp:/tmp/shared_all
@@ -22,6 +24,12 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    # 覆盖 Dockerfile 的 CMD，添加 limit-max-requests 参数
+    command: >
+      --port 5000
+      --workers ${SERVER_WORKERS:-4}
+      --limit-max-requests ${LIMIT_MAX_REQUESTS:-200}
+      --timeout-graceful-shutdown ${TIMEOUT_GRACEFUL_SHUTDOWN:-30}
 
 volumes:
   venv_data:

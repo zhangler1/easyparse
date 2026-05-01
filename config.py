@@ -6,7 +6,7 @@ import os
 class ServerConfig:
     PORT: Final[int] = int(os.getenv("PORT", 5000))
     SERVER_WORKERS: Final[int] = int(os.getenv("SERVER_WORKERS", 4))
-    LIMIT_MAX_REQUESTS: Final[int] = int(os.getenv("LIMIT_MAX_REQUESTS", 100))
+    LIMIT_MAX_REQUESTS: Final[int] = int(os.getenv("LIMIT_MAX_REQUESTS", 200))
     TIMEOUT_GRACEFUL_SHUTDOWN: Final[int] = int(os.getenv("TIMEOUT_GRACEFUL_SHUTDOWN", 30))
 
 
