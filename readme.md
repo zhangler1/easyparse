@@ -12,6 +12,41 @@ Easyparse 是一个文件解析与转换服务，基于 FastAPI 构建，提供�
 
 ---
 
+## 环境准备（重要）
+
+本项目依赖两个**本地源码形式**的子项目，必须手动拉取到 `easyparse/` 目录下后才能正常运行：
+
+| 子项目 | 目录 | 用途 |
+|--------|------|------|
+| [`easyofd`](https://github.com/renoyuan/easyofd) | `easyparse/easyofd/` | 解析 OFD 并渲染为 PDF，`/convert` 和 `/ofd_to_pdf` 接口依赖 |
+| [`markitdown`](https://github.com/microsoft/markitdown) | `easyparse/markitdown/` | 解析 PDF/Office 等文档为文本，`/convert` 接口依赖 |
+
+### 拉取方式
+
+```bash
+cd easyparse
+
+# 拉取 easyofd（OFD 解析渲染库）
+git clone https://github.com/renoyuan/easyofd.git
+
+# 拉取 markitdown（微软开源文档解析库）
+git clone https://github.com/microsoft/markitdown.git
+```
+
+### 说明
+
+- `pyproject.toml` 中的 `easyofd` / `markitdown[all]` 声明只是占位，实际运行时优先使用项目本地的源码。
+- Docker 构建时（`dockerfile.uv`）会通过 `uv pip install -e /app/markitdown/packages/markitdown[all]` 将本地 `markitdown` 以可编辑模式安装进虚拟环境；若不提前拉取，镜像构建会失败。
+- 如需本地运行（非 Docker），拉取后执行：
+  ```bash
+  uv venv .venv
+  uv sync
+  uv pip install -e markitdown/packages/markitdown[all]
+  uv pip install -e markitdown/packages/markitdown-sample-plugin
+  ```
+
+---
+
 ## 1. POST `/convert` — 文件解析为文本
 
 ### 功能说明
