@@ -1,43 +1,60 @@
 import docx
-from docx.shared import RGBColor
-from docx.enum.dml import MSO_THEME_COLOR_INDEX
+from docx.oxml.ns import qn
+from docx.oxml.shared import OxmlElement
 
 def add_hyperlink(paragraph, url, text):
-    """
-    Reference from：https://github.com/python-openxml/python-docx/issues/384
+    """在段落中插入一个超链接（蓝色下划线文字）。
 
-    A function that places a hyperlink within a paragraph object.
-    :param paragraph: The paragraph we are adding the hyperlink to.
-    :param url: A string containing the required url
-    :param text: The text displayed for the url
-    :return: The hyperlink object
+    正确的 OOXML 结构：
+      <w:p>
+        <w:hyperlink r:id="...">
+          <w:r>
+            <w:rPr>
+              <w:color w:val="0000FF"/>
+              <w:u w:val="single"/>
+            </w:rPr>
+            <w:t>文字</w:t>
+          </w:r>
+        </w:hyperlink>
+      </w:p>
+
+    原实现把同一个 hyperlink 节点先 append 到 paragraph 再 append 到 run 内，
+    lxml 节点只能有一个父节点，最终 hyperlink 会被嵌套在空 run 内，
+    形成非法结构 <w:r><w:hyperlink>...</w:hyperlink></w:r>，Word 不会渲染。
     """
-    # This gets access to the document.xml.rels file and gets a new relation id value
+    # 注册外部关系，获取 r:id
     part = paragraph.part
-    r_id = part.relate_to(url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True)
-    # Create the w:hyperlink tag and add needed values
-    hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
-    hyperlink.set(docx.oxml.shared.qn('r:id'), r_id, )
-    # Create a w:r element
-    new_run = docx.oxml.shared.OxmlElement('w:r')
-    # Create a new w:rPr element
-    rPr = docx.oxml.shared.OxmlElement('w:rPr')
-    # Join all the xml elements together add add the required text to the w:r element
-    new_run.append(rPr)
-    if text:
-        new_run.text = text
-    else:
-        new_run.text = url
-    # new_run.font.color.rgb = RGBColor(0,0,255)
-    hyperlink.append(new_run)
-    paragraph._p.append(hyperlink)
-    # paragraph.text = text
+    r_id = part.relate_to(
+        url,
+        docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK,
+        is_external=True,
+    )
 
-    r = paragraph.add_run()
-    r._r.append(hyperlink)
-    # A workaround for the lack of a hyperlink style (doesn't go purple after using the link)
-    # Delete this if using a template that has the hyperlink style in it
-    r.font.color.theme_color = MSO_THEME_COLOR_INDEX.HYPERLINK
-    r.font.color.rgb = RGBColor(0, 0, 255)
-    r.font.underline = True
+    # 创建 <w:hyperlink r:id="...">
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    # 内部 <w:r>
+    new_run = OxmlElement("w:r")
+
+    # <w:rPr>：颜色 + 下划线
+    rPr = OxmlElement("w:rPr")
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "0000FF")
+    rPr.append(color)
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    rPr.append(underline)
+    new_run.append(rPr)
+
+    # <w:t>
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
+    t.text = text if text else url
+    new_run.append(t)
+
+    hyperlink.append(new_run)
+    # 关键：hyperlink 必须是 <w:p> 的直接子元素
+    paragraph._p.append(hyperlink)
     return hyperlink
+

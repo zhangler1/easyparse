@@ -42,9 +42,36 @@ class DocxProcessor:
             StyleManager(self.document, style_conf).init_styles()
 
     # h1, h2, ...
-    def add_heading(self, content: str, tag: str):
+    def add_heading(self, content, tag: str):
+        """添加标题。content 支持字符串或 BeautifulSoup 节点。
+
+        当标题内含嵌套标签（如 <strong>/<a>）时，tag.string 会返回 None，
+        导致标题为空且链接丢失；这里统一走 children 遍历，识别超链接。
+        """
+        from bs4 import NavigableString
+
         level: int = int(tag.__getitem__(1))
-        p = self.document.add_paragraph(content, style="WPSHeading%d" % level)
+        p = self.document.add_paragraph(style="WPSHeading%d" % level)
+
+        if isinstance(content, str):
+            p.add_run(content)
+            return p
+        if content is None:
+            return p
+
+        for elem in content.contents:
+            if isinstance(elem, NavigableString):
+                text = str(elem)
+                if text and text != "\n":
+                    p.add_run(text)
+                continue
+            if elem.name == "a":
+                link_text = elem.get_text() or elem.get("href", "")
+                self.add_link(p, link_text, elem.get("href", ""))
+                continue
+            text = elem.get_text()
+            if text:
+                p.add_run(text)
         return p
 
     # noinspection PyMethodMayBeStatic
@@ -308,26 +335,26 @@ class DocxProcessor:
             if isinstance(item, NavigableString) and item.strip() == "":
                 continue
 
-            # 修改后的文本提取逻辑 - 只提取直接文本内容
-            # 遇到第一个非文本子元素就停止，避免重复处理嵌套内容
-            text = ""
+            # 判空：使用 get_text() 深度提取（含链接文字，跳过嵌套列表）
+            full_text = ""
             for content in item.contents:
                 if isinstance(content, NavigableString):
-                    text += str(content).strip()
+                    full_text += str(content)
+                elif content.name in ("ul", "ol"):
+                    break
                 else:
-                    break  # 遇到第一个非文本子元素就停止
-
-            text = text.strip()
-            # 跳过空文本项
-            if not text:
+                    full_text += content.get_text()
+            full_text = full_text.strip()
+            if not full_text:
                 continue
 
             # 构建当前编号（如"1.2.3"）
             current_numbers = parent_numbers + [num]
             prefix = ".".join(str(n) for n in current_numbers)
 
-            # 添加列表项到文档
-            p = self.add_paragraph(text, prefix=f"{prefix}. ")
+            # 创建列表项段落：先写入编号，再通过 _render_li_inline 渲染内联（识别超链接）
+            p = self.document.add_paragraph(f"{prefix}. ", style=None)
+            self._render_li_inline(p, item)
             p.paragraph_format.left_indent = Pt(12 * current_level)  # 根据层级设置缩进
             p.paragraph_format.space_after = Pt(1)  # 设置段后间距
 
@@ -340,7 +367,7 @@ class DocxProcessor:
                 if item.find("ol"):
                     self.add_number_list(item.ol, current_level + 1, max_level, current_numbers)
                 # 检查并处理嵌套的TODO列表
-                if text.startswith(("[ ]", "[x]")):
+                if full_text.startswith(("[ ]", "[x]")):
                     self.add_todo_list(item, current_level + 1, max_level)
 
             num += 1  # 递增当前层级编号
@@ -372,23 +399,22 @@ class DocxProcessor:
             if isinstance(item, NavigableString) and item.strip() == "":
                 continue
 
-            # 修改后的文本提取逻辑 - 只提取直接文本内容
-            # 遇到第一个非文本子元素就停止，避免重复处理嵌套内容
-            text = ""
+            # 判空：使用 get_text() 深度提取（含链接文字，跳过嵌套列表）
+            full_text = ""
             for content in item.contents:
                 if isinstance(content, NavigableString):
-                    text += str(content).strip()
+                    full_text += str(content)
+                elif content.name in ("ul", "ol"):
+                    break
                 else:
-                    break  # 遇到第一个非文本子元素就停止
-
-            text = text.strip()
-            # 跳过空文本项
-            if not text:
+                    full_text += content.get_text()
+            if not full_text.strip():
                 continue
 
-            # 添加列表项到文档
+            # 创建列表项段落：先写入符号，再通过 _render_li_inline 渲染内联（识别超链接）
             p = self.document.add_paragraph(style=None)
-            p.add_run(" " * (current_level - 1) * 2 + symbol + text)  # 添加缩进和符号
+            p.add_run(" " * (current_level - 1) * 2 + symbol)
+            self._render_li_inline(p, item)
             p.paragraph_format.left_indent = indent  # 设置段落缩进
             p.paragraph_format.space_after = Pt(1)  # 设置段后间距
 
@@ -487,6 +513,54 @@ class DocxProcessor:
         debug("[link]:", text, "[href]:", href)
         add_hyperlink(p, href, text)
         # run = p.add_run(text)
+
+    def _render_li_inline(self, p, item):
+        """将 <li> 的内联内容渲染到段落 p 中。
+
+        核心：识别 <a> 生成真正的超链接；递归展平 <p>/<span>/<div> 等
+        “透明容器”（松散列表 `<li><p><a>...</a></p></li>` 需要这个逻辑）。
+        遇到嵌套的 <ul>/<ol> 则停止，由上层递归处理。
+        返回是否写入了任何可见内容。
+        """
+        from bs4 import NavigableString
+        TRANSPARENT_TAGS = {"p", "span", "div"}
+
+        def _walk(node):
+            wrote_any = False
+            for content in node.contents:
+                if isinstance(content, NavigableString):
+                    s = str(content)
+                    if s and s != "\n":
+                        p.add_run(s)
+                        if s.strip():
+                            wrote_any = True
+                    continue
+                if content.name in ("ul", "ol"):
+                    return wrote_any, True
+                if content.name in TRANSPARENT_TAGS:
+                    child_wrote, should_stop = _walk(content)
+                    wrote_any = wrote_any or child_wrote
+                    if should_stop:
+                        return wrote_any, True
+                    continue
+                if content.name == "a":
+                    href = content.get("href", "")
+                    text = content.get_text()
+                    if text:
+                        self.add_link(p, text, href)
+                        wrote_any = True
+                    continue
+                if content.name == "img":
+                    self.add_picture(content)
+                    continue
+                text = content.get_text()
+                if text:
+                    self.add_run(p, text, content.name)
+                    wrote_any = True
+            return wrote_any, False
+
+        wrote, _ = _walk(item)
+        return wrote
 
     def add_paragraph(self, children, p_style: str = None, prefix: str = ""):
         """
@@ -605,7 +679,8 @@ class DocxProcessor:
                         or root.name == "h4"
                         or root.name == "h5"
                     ):
-                        self.add_heading(root.string, root.name)
+                        # 传入 root 节点而非 root.string：标题内含嵌套标签时 tag.string 为 None
+                        self.add_heading(root, root.name)
             except Exception as e:
                 print(f"解析标签发生错误: {str(e)}")
 
