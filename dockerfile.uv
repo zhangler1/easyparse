@@ -56,3 +56,5 @@ RUN uv pip install --no-cache \
 # 启动命令
 ENTRYPOINT ["uvicorn", "server:app", "--host", "0.0.0.0"]
 CMD ["--port", "5000", "--workers", "4"]
+
+#docker build . -t easyparse.prd:latest  --build-arg https_proxy=http://192.168.0.106:1087  --build-arg http_proxy=http://192.168.0.106:1087 --build-arg no_proxy=localhost,192.168.0.106,.local  -f dockerfile.uv
