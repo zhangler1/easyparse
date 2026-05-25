@@ -417,10 +417,21 @@ git config -f .gitmodules submodule.libs/easyofd.branch v1.2-stable
 
 # 2. 设置全局自动更新
 git config --global submodule.recurse true
+#git pull
+# 以前：只更新父仓库，子模块不动
+# 现在：自动更新子模块到正确版本
+# git checkout
+# 以前：切分支后子模块版本不匹配
+# 现在：自动把子模块切到对应版本
+# git push
+# 自动检查子模块是否有未推送的提交
+# 避免 “父仓库提交了，但子模块代码没推上去” 的坑
 
 # 3. 使用 alias 简化操作
 git config --global alias.sync-sub '!git submodule update --init --recursive && git submodule update --remote --recursive'
-
+# 什么时候必须加 --init？
+# 只在 第一次拉项目、第一次用子模块 时需要。第一次下载代码
+#第一次只写 update = 白跑一趟，代码下不下来。
 ```
 
 ---
