@@ -1,0 +1,6 @@
+[submodule "markitdown"]
+	path = markitdown
+	url = ./markitdown
+[submodule "easyofd"]
+	path = easyofd
+	url = ./easyofd
