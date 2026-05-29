@@ -88,4 +88,12 @@ normal:
     before: 7
     after: 7
 
-
+# 页脚
+footer:
+  text: "内容由AI生成，请核实重要信息"
+  font:
+    default: Times New Roman
+    east-asia: 宋体
+    size: 9
+    color: "999999"
+  alignment: center

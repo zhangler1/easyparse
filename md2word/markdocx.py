@@ -30,9 +30,9 @@ def load_style_config():
         return yaml.load(file, FullLoader)
 
 
-def md2word(inputFile, outputFile):
+def md2word(inputFile, outputFile, footer_text=None, footer_enabled=None):
     htmlString = md2html(inputFile)
-    processor = DocxProcessor(style_conf=load_style_config())  # 每次新建实例
+    processor = DocxProcessor(style_conf=load_style_config(), footer_text=footer_text, footer_enabled=footer_enabled)  # 每次新建实例
     processor.html2docx(htmlString, outputFile)
 
 

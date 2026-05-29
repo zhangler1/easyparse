@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request
+from fastapi import APIRouter, UploadFile, File, HTTPException, BackgroundTasks, Request, Form
 from fastapi.responses import FileResponse
 from utils.common import executor, safe_remove, cleanup, save_to_tempfile, _temp_tracker
 from log_manager import logger
@@ -17,6 +17,8 @@ router = APIRouter()
 async def convert_markdown_to_word(
         request: Request,
         file: UploadFile = File(...),
+        footer_text: Optional[str] = Form(None),
+        footer_enabled: Optional[bool] = Form(None),
         background_tasks: BackgroundTasks = BackgroundTasks(),
 ):
     request_id = request.state.request_id
@@ -62,7 +64,7 @@ async def convert_markdown_to_word(
         # 使用共享线程池执行同步转换函数（原逻辑不变）
         await asyncio.get_running_loop().run_in_executor(
             executor,
-            lambda: md2word(upload_path, result_path),
+            lambda: md2word(upload_path, result_path, footer_text=footer_text, footer_enabled=footer_enabled),
         )
 
         # 检查转换结果（原逻辑不变）

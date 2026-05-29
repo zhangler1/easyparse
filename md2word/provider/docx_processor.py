@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from docx import Document
 from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import *
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.oxml import parse_xml, OxmlElement
 from docx.oxml.ns import qn, nsdecls
 from docx.shape import InlineShape
@@ -17,7 +18,7 @@ from docx.table import Table
 from docx.text.paragraph import Paragraph
 from docx.text.run import Run
 from requests import HTTPError
-
+from log_manager import logger
 from md2word.provider.docx_plus import add_hyperlink
 from md2word.provider.style_manager import StyleManager
 from md2word.utils.style_enum import MDX_STYLE
@@ -36,10 +37,86 @@ def debug(*args):
 
 
 class DocxProcessor:
-    def __init__(self, style_conf: dict):
+    def __init__(self, style_conf: dict, footer_text=None, footer_enabled=None):
         self.document = Document()
+        self.style_conf = style_conf or {}
         if style_conf is not None:
             StyleManager(self.document, style_conf).init_styles()
+        self._add_footer(footer_text, footer_enabled)
+
+    def _add_footer(self, footer_text, footer_enabled=None):
+        """为文档的默认 Section 添加页脚声明文案。
+
+        footer_enabled 参数的语义:
+        - None   : 未传入，按 footer_text / YAML 回退逻辑处理
+        - True   : 启用页脚，使用 footer_text 指定的文案
+        - False  : 显式禁用页脚，不赴 YAML 回退
+
+        footer_text 参数的语义（仅当 footer_enabled 不是 False 时生效）:
+        - None   : 未传入，赴 YAML 回退默认值
+        - "xxx"  : 使用调用方指定的文案
+
+        文案优先级：footer_enabled=False 禁用 > footer_text 参数 > style_conf['footer']['text'] > 无页脚
+        """
+        # footer_enabled=False = 显式禁用页脚
+        if footer_enabled is False:
+            return
+
+        logger.info(f"footer_text: -{footer_text}- footer_enabled: -{footer_enabled}-")
+
+        # 确定最终文案
+        actual_text = footer_text
+        if actual_text is None:
+            footer_conf = self.style_conf.get("footer", {})
+            actual_text = footer_conf.get("text")
+        if not actual_text:
+            return  # 无文案，不设置页脚
+
+        # 获取默认 Section 的页脚
+        section = self.document.sections[0]
+        footer = section.footer
+        footer.is_linked_to_previous = False  # 断开继承，否则写入内容不会显示
+
+        # 添加页脚文案段落
+        paragraph = footer.paragraphs[0]
+
+        # 对齐方式
+        footer_conf = self.style_conf.get("footer", {})
+        alignment_str = footer_conf.get("font", {}).get("alignment", footer_conf.get("alignment", "center"))
+        alignment_map = {
+            "center": WD_PARAGRAPH_ALIGNMENT.CENTER,
+            "left": WD_PARAGRAPH_ALIGNMENT.LEFT,
+            "right": WD_PARAGRAPH_ALIGNMENT.RIGHT,
+        }
+        paragraph.alignment = alignment_map.get(alignment_str, WD_PARAGRAPH_ALIGNMENT.CENTER)
+
+        # 添加 run
+        run = paragraph.add_run(actual_text)
+
+        # 字体样式配置
+        font_conf = footer_conf.get("font", {})
+        font_default = font_conf.get("default", "Times New Roman")
+        font_east_asia = font_conf.get("east-asia", "宋体")
+        font_size = font_conf.get("size", 9)
+        font_color = font_conf.get("color", "999999")
+
+        # 字号
+        run.font.size = Pt(font_size)
+
+        # 颜色
+        run.font.color.rgb = RGBColor.from_string(font_color)
+
+        # 西文字体
+        run.font.name = font_default
+
+        # 中文字体（WPS 兼容：通过 OxmlElement 显式设置 w:eastAsia）
+        rpr = run._element.get_or_add_rPr()
+        rfonts = OxmlElement('w:rFonts')
+        rfonts.set(qn('w:eastAsia'), font_east_asia)
+        # 移除可能存在的旧字体设置，避免冲突
+        for e in rpr.xpath('.//w:rFonts'):
+            rpr.remove(e)
+        rpr.append(rfonts)
 
     # h1, h2, ...
     def add_heading(self, content, tag: str):
