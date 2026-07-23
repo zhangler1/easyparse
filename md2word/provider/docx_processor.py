@@ -253,6 +253,48 @@ class DocxProcessor:
         #     desc.style.font.bold = False
         #     desc.paragraph_format.first_line_indent = 0
 
+    def _render_inline(self, p, node):
+        """Render inline HTML content into paragraph p.
+
+        Handles NavigableString, <a> (hyperlinks), <strong>/<em>/<u>/<strike>/<sub>/<sup>
+        (formatting), transparent containers (<p>/<span>/<div>), and <img>.
+        Stops at <ul>/<ol> (nested list boundaries).
+        Returns True if any visible content was written.
+        """
+        from bs4 import NavigableString
+        TRANSPARENT_TAGS = {"p", "span", "div"}
+
+        wrote_any = False
+        for content in node.contents:
+            if isinstance(content, NavigableString):
+                s = str(content)
+                if s and s != "\n":
+                    p.add_run(s)
+                    if s.strip():
+                        wrote_any = True
+                continue
+            if content.name in ("ul", "ol"):
+                continue  # Nested list boundary
+            if content.name in TRANSPARENT_TAGS:
+                wrote_any = self._render_inline(p, content) or wrote_any
+                continue
+            if content.name == "a":
+                href = content.get("href", "")
+                text = content.get_text()
+                if text:
+                    self.add_link(p, text, href)
+                    wrote_any = True
+                continue
+            if content.name == "img":
+                self.add_picture(content)
+                continue
+            # Format tags: strong, em, u, strike, sub, sup
+            text = content.get_text()
+            if text:
+                self.add_run(p, text, content.name)
+                wrote_any = True
+        return wrote_any
+
     def add_table(self, table_root):
         # 统计列数
         col_count: int = 0
@@ -274,23 +316,28 @@ class DocxProcessor:
                 continue
             cell_p = head_row_cells[i].paragraphs[0]
             cell_p.paragraph_format.first_line_indent = Inches(0)  # 清除缩进
-            run = cell_p.add_run(col.string)
-            run.bold = True
+            # Render inline content (links, bold, text) instead of col.string
+            self._render_inline(cell_p, col)
+            # Bold all runs in header cells
+            for run in cell_p.runs:
+                run.bold = True
             i += 1
 
         # 数据行
-        for tr in table_root.tbody:
-            if tr.string == "\n":
-                continue
-            row_cells = table.add_row().cells
-            i = 0
-            for td in tr.contents:
-                if td.string == "\n":
+        if table_root.tbody:
+            for tr in table_root.tbody:
+                if tr.string == "\n":
                     continue
-                cell_p = row_cells[i].paragraphs[0]
-                cell_p.paragraph_format.first_line_indent = Inches(0)  # 清除缩进
-                cell_p.add_run(td.string)
-                i += 1
+                row_cells = table.add_row().cells
+                i = 0
+                for td in tr.contents:
+                    if td.string == "\n":
+                        continue
+                    cell_p = row_cells[i].paragraphs[0]
+                    cell_p.paragraph_format.first_line_indent = Inches(0)  # 清除缩进
+                    # Render inline content instead of td.string
+                    self._render_inline(cell_p, td)
+                    i += 1
 
     def add_number_list(self, number_list, current_level=1, max_level=4):
         """动态生成有序列表，支持嵌套无序/TODO列表"""
@@ -593,11 +640,8 @@ class DocxProcessor:
 
     def _render_li_inline(self, p, item):
         """将 <li> 的内联内容渲染到段落 p 中。
-
-        核心：识别 <a> 生成真正的超链接；递归展平 <p>/<span>/<div> 等
-        “透明容器”（松散列表 `<li><p><a>...</a></p></li>` 需要这个逻辑）。
-        遇到嵌套的 <ul>/<ol> 则停止，由上层递归处理。
-        返回是否写入了任何可见内容。
+        遇到嵌套的 <ul>/<ol> 则停止（返回 sentinel），由上层递归处理。
+        返回 (wrote_any, should_stop) 元组。
         """
         from bs4 import NavigableString
         TRANSPARENT_TAGS = {"p", "span", "div"}
@@ -620,20 +664,9 @@ class DocxProcessor:
                     if should_stop:
                         return wrote_any, True
                     continue
-                if content.name == "a":
-                    href = content.get("href", "")
-                    text = content.get_text()
-                    if text:
-                        self.add_link(p, text, href)
-                        wrote_any = True
-                    continue
-                if content.name == "img":
-                    self.add_picture(content)
-                    continue
-                text = content.get_text()
-                if text:
-                    self.add_run(p, text, content.name)
-                    wrote_any = True
+                # Use _render_inline for all other inline content
+                child_wrote = self._render_inline(p, content)
+                wrote_any = wrote_any or child_wrote
             return wrote_any, False
 
         wrote, _ = _walk(item)
