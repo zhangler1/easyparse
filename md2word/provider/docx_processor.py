@@ -684,15 +684,7 @@ class DocxProcessor:
         if type(children) == str:
             p.add_run(children)
             return p
-        for elem in children.contents:  # 遍历一个段落内的所有元素
-            if elem.name == "a":
-                self.add_link(p, elem.string, elem["href"])
-            elif elem.name == "img":
-                self.add_picture(elem)
-            elif elem.name is not None:  # 有字符样式的子串
-                self.add_run(p, elem.string, elem.name)
-            elif not elem.string == "\n":  # 无字符样式的子串
-                self.add_run(p, elem)
+        self._render_inline(p, children)
         return p
 
     # from docx.enum.style import WD_STYLE
@@ -704,20 +696,12 @@ class DocxProcessor:
         p = row_cells[0].paragraphs[0]
 
         for child in children.contents:
-            if child.string != "\n":
-                # self.add_paragraph(p, p_style=MDX_STYLE.BLOCKQUOTE)
-                if type(child) == str:
-                    p.add_run(child)
-                    return p
-                for elem in child.contents:  # 遍历一个段落内的所有元素
-                    if elem.name == "a":
-                        self.add_link(p, elem.string, elem["href"])
-                    elif elem.name == "img":
-                        self.add_picture(elem)
-                    elif elem.name is not None:  # 有字符样式的子串
-                        self.add_run(p, elem.string, elem.name)
-                    elif not elem.string == "\n":  # 无字符样式的子串
-                        self.add_run(p, elem)
+            if child.name is None:  # NavigableString (plain text)
+                s = str(child)
+                if s.strip():
+                    p.add_run(s)
+                continue
+            self._render_inline(p, child)
 
         shading_elm_1 = parse_xml(r'<w:shd {} w:fill="efefef"/>'.format(nsdecls("w")))
         table.rows[0].cells[0]._tc.get_or_add_tcPr().append(shading_elm_1)
